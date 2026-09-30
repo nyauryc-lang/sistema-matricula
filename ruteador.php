@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // Incluir el autoloader de Composer si no está cargado
 if (!class_exists('Composer\Autoload\ClassLoader') && file_exists(__DIR__ . '/vendor/autoload.php')) {
     require_once __DIR__ . '/vendor/autoload.php';
@@ -21,7 +21,11 @@ $esRutaPublica = isset($rutasPublicas[$controlador]) && in_array($accion, $rutas
 
 // Redirigir al login si no ha iniciado sesión
 if (!$esRutaPublica && !isset($_SESSION["idUsuario"])) {
-    header("Location: ./?controlador=login&accion=mostrar");
+    if (!headers_sent()) {
+        header("Location: ./?controlador=login&accion=mostrar");
+    } else {
+        echo "<script>window.location.href = './?controlador=login&accion=mostrar';</script>";
+    }
     exit();
 }
 
@@ -39,7 +43,11 @@ if (isset($_SESSION["rol"]) && $_SESSION["rol"] == "docente") {
                        && in_array($accion, $rutasPermitidasDocente[$controlador]);
 
     if (!$accionPermitida) {
-        header("Location: ./?controlador=cursos&accion=inicio");
+        if (!headers_sent()) {
+            header("Location: ./?controlador=cursos&accion=inicio");
+        } else {
+            echo "<script>window.location.href = './?controlador=cursos&accion=inicio';</script>";
+        }
         exit();
     }
 }

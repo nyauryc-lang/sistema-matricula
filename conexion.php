@@ -9,11 +9,11 @@ class BD {
 
     public static function crearInstancia() {
         if (!isset(self::$instancia)) {
-            $host     = getenv('DB_HOST')     ?: 'localhost';
+            $host     = getenv('DB_HOST')     ?: 'aws-0-ca-central-1.pooler.supabase.com';
             $port     = getenv('DB_PORT')     ?: '5432';
             $dbname   = getenv('DB_NAME')     ?: 'postgres';
-            $user     = getenv('DB_USER')     ?: 'postgres';
-            $password = getenv('DB_PASSWORD') ?: '';
+            $user     = getenv('DB_USER')     ?: 'postgres.zxscrsojikgbsquyuzxe';
+            $password = getenv('DB_PASSWORD') ?: 'YA31Ni(24)1';
 
             $opciones = [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -21,47 +21,49 @@ class BD {
                 PDO::ATTR_TIMEOUT            => 5,
             ];
 
-            // Lista de configuraciones a intentar (Directo -> Pooler sa-east-1 -> Pooler us-east-1)
-            $intentos = [];
+            $projectRef = 'zxscrsojikgbsquyuzxe';
+            $poolerUser = (str_contains($user, '.')) ? $user : "postgres.{$projectRef}";
 
-            // 1. Configuración configurada por variables de entorno
-            $intentos[] = [
-                'host' => $host,
-                'port' => $port,
-                'user' => $user,
+            // Lista de configuraciones en orden de prioridad:
+            // Tu proyecto está en la región Canada Central (ca-central-1)
+            $intentos = [
+                [
+                    'host' => 'aws-0-ca-central-1.pooler.supabase.com',
+                    'port' => '5432',
+                    'user' => $poolerUser,
+                ],
+                [
+                    'host' => 'aws-0-ca-central-1.pooler.supabase.com',
+                    'port' => '6543',
+                    'user' => $poolerUser,
+                ],
+                [
+                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
+                    'port' => '5432',
+                    'user' => $poolerUser,
+                ],
+                [
+                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
+                    'port' => '6543',
+                    'user' => $poolerUser,
+                ],
+                [
+                    'host' => "db.{$projectRef}.supabase.co",
+                    'port' => '5432',
+                    'user' => 'postgres',
+                ],
             ];
 
-            // Si el host es un dominio directo de Supabase (db.xxxx.supabase.co),
-            // en entornos sin IPv6 como Vercel se debe usar el connection pooler IPv4.
-            if (preg_match('/db\.([a-z0-9]+)\.supabase\.co/i', $host, $matches)) {
-                $projectRef = $matches[1];
-                $poolerUser = (str_contains($user, '.')) ? $user : "postgres.{$projectRef}";
-
-                // Pooler región São Paulo (sa-east-1)
-                $intentos[] = [
-                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
-                    'port' => '5432',
-                    'user' => $poolerUser,
-                ];
-                $intentos[] = [
-                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
-                    'port' => '6543',
-                    'user' => $poolerUser,
-                ];
-                // Pooler región US East (us-east-1)
-                $intentos[] = [
-                    'host' => 'aws-0-us-east-1.pooler.supabase.com',
-                    'port' => '5432',
-                    'user' => $poolerUser,
-                ];
-                $intentos[] = [
-                    'host' => 'aws-0-us-east-1.pooler.supabase.com',
-                    'port' => '6543',
-                    'user' => $poolerUser,
-                ];
+            // Si DB_HOST vino configurado y no es db.xxxx, ponerlo al inicio
+            if ($host && !str_starts_with($host, 'db.')) {
+                array_unshift($intentos, [
+                    'host' => $host,
+                    'port' => $port,
+                    'user' => $user,
+                ]);
             }
 
-            $ultimoError = null;
+            $errores = [];
             foreach ($intentos as $config) {
                 try {
                     $dsn = "pgsql:host={$config['host']};port={$config['port']};dbname={$dbname};sslmode=require";
@@ -70,12 +72,11 @@ class BD {
                     self::$instancia = $pdo;
                     return self::$instancia;
                 } catch (Exception $e) {
-                    $ultimoError = $e;
-                    // Continuar al siguiente intento si falla
+                    $errores[] = "[{$config['host']}:{$config['port']}] " . $e->getMessage();
                 }
             }
 
-            die("Error de conexión a la base de datos Supabase: " . ($ultimoError ? $ultimoError->getMessage() : 'Desconocido'));
+            die("Error de conexión a la base de datos Supabase: " . implode(" | ", $errores));
         }
         return self::$instancia;
     }

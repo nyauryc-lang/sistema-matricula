@@ -9,11 +9,11 @@ class BD {
 
     public static function crearInstancia() {
         if (!isset(self::$instancia)) {
-            $host     = getenv('DB_HOST')     ?: 'aws-0-ca-central-1.pooler.supabase.com';
-            $port     = getenv('DB_PORT')     ?: '5432';
-            $dbname   = getenv('DB_NAME')     ?: 'postgres';
-            $user     = getenv('DB_USER')     ?: 'postgres.zxscrsojikgbsquyuzxe';
-            $password = getenv('DB_PASSWORD') ?: 'YA31Ni(24)1';
+            $host   = getenv('DB_HOST')   ?: 'aws-0-ca-central-1.pooler.supabase.com';
+            $port   = getenv('DB_PORT')   ?: '5432';
+            $dbname = getenv('DB_NAME')   ?: 'postgres';
+            $user   = getenv('DB_USER')   ?: 'postgres.zxscrsojikgbsquyuzxe';
+            $rawPass = getenv('DB_PASSWORD');
 
             $opciones = [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -24,59 +24,37 @@ class BD {
             $projectRef = 'zxscrsojikgbsquyuzxe';
             $poolerUser = (str_contains($user, '.')) ? $user : "postgres.{$projectRef}";
 
-            // Lista de configuraciones en orden de prioridad:
-            // Tu proyecto está en la región Canada Central (ca-central-1)
-            $intentos = [
-                [
-                    'host' => 'aws-0-ca-central-1.pooler.supabase.com',
-                    'port' => '5432',
-                    'user' => $poolerUser,
-                ],
-                [
-                    'host' => 'aws-0-ca-central-1.pooler.supabase.com',
-                    'port' => '6543',
-                    'user' => $poolerUser,
-                ],
-                [
-                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
-                    'port' => '5432',
-                    'user' => $poolerUser,
-                ],
-                [
-                    'host' => 'aws-0-sa-east-1.pooler.supabase.com',
-                    'port' => '6543',
-                    'user' => $poolerUser,
-                ],
-                [
-                    'host' => "db.{$projectRef}.supabase.co",
-                    'port' => '5432',
-                    'user' => 'postgres',
-                ],
+            // Lista de contraseñas a intentar (limpiando comillas o espacios)
+            $passwordsToTry = array_unique(array_filter([
+                $rawPass ? trim($rawPass, " \t\n\r\0\x0B\"'") : null,
+                'YA31Ni(24)1',
+                'YA31Ni241',
+            ]));
+
+            // Configuraciones de host/puerto
+            $servidores = [
+                ['host' => 'aws-0-ca-central-1.pooler.supabase.com', 'port' => '5432', 'user' => $poolerUser],
+                ['host' => 'aws-0-ca-central-1.pooler.supabase.com', 'port' => '6543', 'user' => $poolerUser],
             ];
 
-            // Si DB_HOST vino configurado y no es db.xxxx, ponerlo al inicio
-            if ($host && !str_starts_with($host, 'db.')) {
-                array_unshift($intentos, [
-                    'host' => $host,
-                    'port' => $port,
-                    'user' => $user,
-                ]);
-            }
-
             $errores = [];
-            foreach ($intentos as $config) {
-                try {
-                    $dsn = "pgsql:host={$config['host']};port={$config['port']};dbname={$dbname};sslmode=require";
-                    $pdo = new PDO($dsn, $config['user'], $password, $opciones);
-                    $pdo->exec("SET client_encoding TO 'UTF8'");
-                    self::$instancia = $pdo;
-                    return self::$instancia;
-                } catch (Exception $e) {
-                    $errores[] = "[{$config['host']}:{$config['port']}] " . $e->getMessage();
+
+            foreach ($passwordsToTry as $pass) {
+                foreach ($servidores as $srv) {
+                    try {
+                        $dsn = "pgsql:host={$srv['host']};port={$srv['port']};dbname={$dbname};sslmode=require";
+                        $pdo = new PDO($dsn, $srv['user'], $pass, $opciones);
+                        $pdo->exec("SET client_encoding TO 'UTF8'");
+                        self::$instancia = $pdo;
+                        return self::$instancia;
+                    } catch (Exception $e) {
+                        $errores[] = "[{$srv['host']}:{$srv['port']} pass_len=" . strlen($pass) . "] " . $e->getMessage();
+                    }
                 }
             }
 
-            die("Error de conexión a la base de datos Supabase: " . implode(" | ", $errores));
+            die("Error de autenticación con Supabase: " . implode(" <br> ", $errores) . 
+                "<br><br><b>Consejo:</b> Si cambiaste la contraseña de tu base de datos en Supabase, ve a <i>Supabase -> Settings -> Database -> Database Password</i> y dale a <i>Reset Password</i>.");
         }
         return self::$instancia;
     }

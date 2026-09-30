@@ -1,0 +1,31 @@
+# =============================================
+# .gitignore — Sistema de Matrículas
+# =============================================
+
+# Variables de entorno con credenciales (NUNCA a Git)
+.env
+*.env.local
+*.env.production
+
+# Dependencias (se instalan con composer install)
+vendor/
+
+# Uploads del usuario (archivos subidos al servidor)
+uploads/*
+!uploads/default.png
+
+# Logs y temporales
+*.log
+logs/
+*.tmp
+*.bak
+
+# IDE y sistema operativo
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Composer compilado (innecesario en el repo)
+composer.phar
